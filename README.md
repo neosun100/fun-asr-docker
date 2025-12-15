@@ -1,11 +1,11 @@
 # Fun-ASR
 
-「简体中文」|「[English](./README_en.md)」
+「简体中文」|「[English](README_en.md)」
 
 Fun-ASR 是通义实验室推出的端到端语音识别大模型，是基于数千万小时真实语音数据训练而成，具备强大的上下文理解能力与行业适应性，支持低延迟实时听写，并且覆盖 31 个语种。在教育、金融等垂直领域表现出色，能准确识别专业术语与行业表达，有效应对"幻觉"生成和语种混淆等挑战，实现"听得清、懂其意、写得准"。
 
 <div align="center">
-<img src="image/funasr-v2.png">
+<img src="images/funasr-v2.png">
 </div>
 
 <div align="center">
@@ -21,7 +21,7 @@ Fun-ASR 是通义实验室推出的端到端语音识别大模型，是基于数
 模型仓库：[modelscope](https://www.modelscope.cn/models/FunAudioLLM/Fun-ASR-Nano-2512)，[huggingface(coming)](https://huggingface.co/FunAudioLLM/FunASR)
 
 在线体验：
-[魔搭社区创空间](https://modelscope.cn/studios/FunAudioLLM/Fun-ASR-Nano/)，[huggingface space(coming)](https://huggingface.co/spaces/FunAudioLLM/FunASR)
+[魔搭社区创空间](https://modelscope.cn/studios/FunAudioLLM/Fun-ASR-Nano)，[huggingface space(coming)](https://huggingface.co/spaces/FunAudioLLM/FunASR)
 
 </div>
 
@@ -46,11 +46,9 @@ pip install -r requirements.txt
 
 # TODO
 
-[ ] 支持返回时间戳
-
-[ ] 支持区分说话人识别
-
-[ ] 支持模型训练
+- [] 支持返回时间戳
+- [] 支持区分说话人识别
+  [- ] 支持模型训练
 
 # 用法 🛠️
 
@@ -125,26 +123,12 @@ if __name__ == "__main__":
 
 # 性能评测 📝
 
-## 多语言语音识别
-
-我们在开源基准数据集（包括 AISHELL-1、AISHELL-2、Wenetspeech、Librispeech 和 Common Voice）上比较了 Fun-ASR 与其他模型的多语言语音识别性能。在中文和粤语识别效果上，Fun-ASR 模型具有明显的效果优势。
+我们在开源基准数据集、中文方言测试集和工业测试集上，比较了 Fun-ASR 与其他模型的多语言语音识别性能。Fun-ASR 模型均具有明显的效果优势。
 
 <div align="center">
-<img src="image/asr_results1.png" width="400" /><img src="image/asr_results2.png" width="400" />
+<img src="images/radar.png" width="800" />
 </div>
 
-## 方言识别性能
-
-Fun-ASR 在中文方言识别任务上表现优异，覆盖 7 大方言和 26 个地区口音，识别准确率显著优于其他开源模型。
-
 <div align="center">
-<img src="image/dialect_results.png" width="800" />
-</div>
-
-## 热词定制效果
-
-在工业应用场景中，Fun-ASR 的热词定制能力表现出色，在不损伤通用识别准确率的前提下，将定制热词数量从 1000 拓展到 10000。
-
-<div align="center">
-<img src="image/hotword_results.png" width="800" />
+<img src="images/hist.png" width="800" />
 </div>
