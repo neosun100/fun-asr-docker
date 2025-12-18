@@ -24,16 +24,15 @@ RUN pip install --upgrade pip && \
     pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
     pip install -r requirements.txt
 
-# Copy application code
+# Copy model.py first (needed for ASR model loading)
 COPY model.py .
-COPY app.py .
-COPY mcp_server.py .
 
 # ============================================
 # ALL-IN-ONE: Pre-download models during build
+# These layers are cached, won't re-download unless model.py changes
 # ============================================
 
-# Download Fun-ASR-Nano-2512 model from ModelScope
+# Download Fun-ASR-Nano-2512 model (1.84GB)
 RUN python -c "from funasr import AutoModel; \
     AutoModel(model='FunAudioLLM/Fun-ASR-Nano-2512', \
               trust_remote_code=True, \
@@ -42,7 +41,7 @@ RUN python -c "from funasr import AutoModel; \
               disable_update=True)" && \
     echo "ASR model downloaded successfully"
 
-# Download FSMN-VAD model from ModelScope
+# Download FSMN-VAD model (1.6MB)
 RUN python -c "from funasr import AutoModel; \
     AutoModel(model='fsmn-vad', \
               model_revision='v2.0.4', \
@@ -50,10 +49,14 @@ RUN python -c "from funasr import AutoModel; \
               disable_update=True)" && \
     echo "VAD model downloaded successfully"
 
+# Copy application code AFTER model download (changes here won't invalidate model cache)
+COPY app.py .
+COPY mcp_server.py .
+
 # Expose port
 EXPOSE 8189
 
-# Health check (reduced start-period since models are pre-loaded)
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8189/health || exit 1
 

@@ -44,9 +44,20 @@ def get_model():
     global model, model_path
     if model is None:
         from funasr import AutoModel
-        model_dir = os.environ.get("MODEL_DIR", "FunAudioLLM/Fun-ASR-Nano-2512")
+        # Use local cached path for offline operation
+        model_id = os.environ.get("MODEL_DIR", "FunAudioLLM/Fun-ASR-Nano-2512")
+        local_model_path = f"/root/.cache/modelscope/hub/models/{model_id}"
+        
+        # Check if local model exists, otherwise use model_id (will download)
+        if os.path.exists(local_model_path):
+            model_dir = local_model_path
+            logger.info(f"Using local model: {model_dir}")
+        else:
+            model_dir = model_id
+            logger.info(f"Model not cached, will download: {model_dir}")
+        
         device = "cuda:0"
-        logger.info(f"Loading model {model_dir} on {device}...")
+        logger.info(f"Loading model on {device}...")
         start = time.time()
         model = AutoModel(
             model=model_dir,
@@ -64,9 +75,19 @@ def get_vad_model():
     global vad_model
     if vad_model is None:
         from funasr import AutoModel
+        # Use local cached path for offline operation
+        local_vad_path = "/root/.cache/modelscope/hub/models/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch"
+        
+        if os.path.exists(local_vad_path):
+            model_dir = local_vad_path
+            logger.info(f"Using local VAD model: {model_dir}")
+        else:
+            model_dir = "fsmn-vad"
+            logger.info("VAD model not cached, will download")
+        
         logger.info("Loading VAD model...")
         start = time.time()
-        vad_model = AutoModel(model="fsmn-vad", model_revision="v2.0.4", device="cuda:0", disable_update=True)
+        vad_model = AutoModel(model=model_dir, device="cuda:0", disable_update=True)
         logger.info(f"VAD model loaded in {time.time()-start:.2f}s")
     return vad_model
 
