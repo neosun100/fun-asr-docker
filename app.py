@@ -1,6 +1,6 @@
 """
 Fun-ASR All-in-One Docker Service
-FastAPI + WebSocket + Gradio UI
+FastAPI + WebSocket + Gradio UI with Progress
 """
 import os
 import io
@@ -9,15 +9,18 @@ import json
 import asyncio
 import tempfile
 import logging
+import uuid
+import threading
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Callable, Generator
 from contextlib import asynccontextmanager
+from concurrent.futures import ThreadPoolExecutor
 
 import torch
 import torchaudio
 import numpy as np
-from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect, HTTPException, Form
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect, HTTPException, Form, BackgroundTasks
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import gradio as gr
 
@@ -28,6 +31,10 @@ logger = logging.getLogger(__name__)
 model = None
 vad_model = None
 model_path = None
+
+# Task storage for async API
+tasks = {}
+executor = ThreadPoolExecutor(max_workers=2)
 
 # Audio longer than this (seconds) will use VAD segmentation
 VAD_THRESHOLD_SECONDS = 30
@@ -71,8 +78,19 @@ def get_audio_duration(audio_path: str) -> float:
     except:
         return 0
 
-def transcribe(audio_path: str, language: str = "auto", hotwords: List[str] = None, itn: bool = True) -> dict:
-    """Core transcription function with VAD for long audio"""
+def transcribe_with_progress(
+    audio_path: str, 
+    language: str = "auto", 
+    hotwords: List[str] = None, 
+    itn: bool = True,
+    progress_callback: Callable[[int, int, str], None] = None
+) -> dict:
+    """
+    Core transcription function with VAD for long audio and progress callback.
+    
+    Args:
+        progress_callback: Function(current, total, partial_text) called during processing
+    """
     m = get_model()
     start = time.time()
     
@@ -82,14 +100,17 @@ def transcribe(audio_path: str, language: str = "auto", hotwords: List[str] = No
     if duration > VAD_THRESHOLD_SECONDS:
         logger.info(f"Long audio ({duration:.1f}s), using VAD segmentation...")
         vad = get_vad_model()
-        # Get VAD segments: [[start_ms, end_ms], ...]
         vad_res = vad.generate(input=audio_path)
         segments = vad_res[0]["value"] if vad_res and "value" in vad_res[0] else []
         
         if not segments:
             logger.warning("VAD returned no segments, falling back to direct recognition")
+            if progress_callback:
+                progress_callback(0, 1, "")
             res = m.generate(input=[audio_path], cache={}, batch_size=1, hotwords=hotwords or [], language=language, itn=itn)
             text = res[0]["text"] if res else ""
+            if progress_callback:
+                progress_callback(1, 1, text)
         else:
             # Load audio and process each segment
             waveform, sr = torchaudio.load(audio_path)
@@ -99,29 +120,42 @@ def transcribe(audio_path: str, language: str = "auto", hotwords: List[str] = No
             waveform = waveform.mean(dim=0, keepdim=True) if waveform.shape[0] > 1 else waveform
             
             texts = []
+            total = len(segments)
             for i, seg in enumerate(segments):
                 start_sample = int(seg[0] * sr / 1000)
                 end_sample = int(seg[1] * sr / 1000)
                 chunk = waveform[:, start_sample:end_sample]
                 
-                # Save chunk to temp file
-                chunk_path = f"/tmp/chunk_{i}.wav"
+                chunk_path = f"/tmp/chunk_{uuid.uuid4().hex[:8]}.wav"
                 torchaudio.save(chunk_path, chunk, sr)
                 
-                res = m.generate(input=[chunk_path], cache={}, batch_size=1, hotwords=hotwords or [], language=language, itn=itn)
-                if res and res[0]["text"]:
-                    texts.append(res[0]["text"])
+                try:
+                    res = m.generate(input=[chunk_path], cache={}, batch_size=1, hotwords=hotwords or [], language=language, itn=itn)
+                    if res and res[0]["text"]:
+                        texts.append(res[0]["text"])
+                finally:
+                    if os.path.exists(chunk_path):
+                        os.remove(chunk_path)
                 
-                os.remove(chunk_path)
+                if progress_callback:
+                    progress_callback(i + 1, total, "".join(texts))
             
             text = "".join(texts)
             logger.info(f"Processed {len(segments)} VAD segments")
     else:
+        if progress_callback:
+            progress_callback(0, 1, "")
         res = m.generate(input=[audio_path], cache={}, batch_size=1, hotwords=hotwords or [], language=language, itn=itn)
         text = res[0]["text"] if res else ""
+        if progress_callback:
+            progress_callback(1, 1, text)
     
     elapsed = time.time() - start
-    return {"text": text, "time": round(elapsed, 3)}
+    return {"text": text, "time": round(elapsed, 3), "duration": round(duration, 2)}
+
+def transcribe(audio_path: str, language: str = "auto", hotwords: List[str] = None, itn: bool = True) -> dict:
+    """Simple transcription without progress callback"""
+    return transcribe_with_progress(audio_path, language, hotwords, itn, None)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -132,8 +166,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Fun-ASR API",
-    description="Speech Recognition API based on Fun-ASR-Nano",
-    version="1.0.0",
+    description="Speech Recognition API based on Fun-ASR-Nano with VAD segmentation",
+    version="1.2.0",
     lifespan=lifespan,
 )
 
@@ -150,22 +184,22 @@ app.add_middleware(
 @app.get("/health")
 async def health():
     """Health check endpoint"""
-    gpu_id = os.environ.get('NVIDIA_VISIBLE_DEVICES', '0').split(',')[0]
     gpu_info = {}
     try:
         import subprocess
         result = subprocess.run(
-            ['nvidia-smi', '--query-gpu=memory.used,memory.total', '--format=csv,noheader,nounits', f'--id={gpu_id}'],
+            ['nvidia-smi', '--query-gpu=memory.used,memory.total', '--format=csv,noheader,nounits'],
             capture_output=True, text=True
         )
         if result.returncode == 0:
             used, total = result.stdout.strip().split(', ')
-            gpu_info = {"memory_used_mb": int(used), "memory_total_mb": int(total), "gpu_id": gpu_id}
+            gpu_info = {"memory_used_mb": int(used), "memory_total_mb": int(total)}
     except:
         pass
     return {
         "status": "healthy",
         "model_loaded": model is not None,
+        "vad_loaded": vad_model is not None,
         "gpu": gpu_info
     }
 
@@ -178,11 +212,7 @@ async def transcribe_audio(
 ):
     """
     Transcribe audio file (OpenAI Whisper compatible endpoint)
-    
-    - **file**: Audio file (wav, mp3, etc.)
-    - **language**: Language code (auto, zh, en, ja)
-    - **hotwords**: Comma-separated hotwords for better recognition
-    - **itn**: Inverse text normalization (convert numbers to digits, etc.)
+    Supports long audio with automatic VAD segmentation.
     """
     with tempfile.NamedTemporaryFile(suffix=Path(file.filename).suffix, delete=False) as tmp:
         content = await file.read()
@@ -191,42 +221,70 @@ async def transcribe_audio(
     
     try:
         hw_list = [w.strip() for w in hotwords.split(",") if w.strip()] if hotwords else []
-        result = transcribe(tmp_path, language, hw_list, itn)
-        return {"text": result["text"], "duration": result["time"]}
+        # Run in thread pool to not block event loop
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(executor, transcribe, tmp_path, language, hw_list, itn)
+        return {"text": result["text"], "duration": result["time"], "audio_duration": result.get("duration", 0)}
     finally:
         os.unlink(tmp_path)
 
-@app.post("/api/transcribe")
-async def api_transcribe(
+@app.post("/v1/audio/transcriptions/stream")
+async def transcribe_audio_stream(
     file: UploadFile = File(...),
     language: str = Form("auto"),
     hotwords: str = Form(""),
     itn: bool = Form(True),
 ):
-    """Alternative transcription endpoint"""
-    return await transcribe_audio(file, language, hotwords, itn)
+    """
+    Transcribe audio with Server-Sent Events for progress updates.
+    Returns streaming response with progress and final result.
+    """
+    with tempfile.NamedTemporaryFile(suffix=Path(file.filename).suffix, delete=False) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+    
+    hw_list = [w.strip() for w in hotwords.split(",") if w.strip()] if hotwords else []
+    
+    def generate():
+        progress_data = {"current": 0, "total": 0, "text": ""}
+        
+        def progress_cb(current, total, text):
+            progress_data["current"] = current
+            progress_data["total"] = total
+            progress_data["text"] = text
+        
+        # Start transcription in background
+        result_holder = [None]
+        def run_transcribe():
+            result_holder[0] = transcribe_with_progress(tmp_path, language, hw_list, itn, progress_cb)
+        
+        thread = threading.Thread(target=run_transcribe)
+        thread.start()
+        
+        last_current = -1
+        while thread.is_alive():
+            if progress_data["current"] != last_current and progress_data["total"] > 0:
+                last_current = progress_data["current"]
+                yield f"data: {json.dumps({'type': 'progress', 'current': progress_data['current'], 'total': progress_data['total'], 'text': progress_data['text']})}\n\n"
+            time.sleep(0.1)
+        
+        thread.join()
+        os.unlink(tmp_path)
+        
+        if result_holder[0]:
+            yield f"data: {json.dumps({'type': 'complete', 'text': result_holder[0]['text'], 'duration': result_holder[0]['time']})}\n\n"
+    
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 # ==================== WebSocket Streaming ====================
 
 @app.websocket("/ws/transcribe")
 async def websocket_transcribe(websocket: WebSocket):
-    """
-    WebSocket endpoint for streaming audio transcription.
-    
-    Protocol:
-    1. Client sends JSON config: {"language": "auto", "hotwords": [], "itn": true}
-    2. Client sends audio chunks (binary)
-    3. Client sends JSON: {"action": "end"} to finish
-    4. Server responds with transcription result
-    
-    For real-time partial results, audio is accumulated and transcribed periodically.
-    """
+    """WebSocket endpoint for streaming audio transcription with progress."""
     await websocket.accept()
     audio_buffer = io.BytesIO()
     config = {"language": "auto", "hotwords": [], "itn": True}
-    sample_rate = 16000
-    last_transcribe_time = 0
-    partial_interval = 2.0  # Send partial results every 2 seconds
     
     try:
         while True:
@@ -235,52 +293,52 @@ async def websocket_transcribe(websocket: WebSocket):
             if "text" in data:
                 msg = json.loads(data["text"])
                 if msg.get("action") == "end":
-                    # Final transcription
                     if audio_buffer.tell() > 0:
                         audio_buffer.seek(0)
                         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
                             tmp.write(audio_buffer.read())
                             tmp_path = tmp.name
+                        
                         try:
-                            result = transcribe(tmp_path, config["language"], config["hotwords"], config["itn"])
+                            async def send_progress(current, total, text):
+                                await websocket.send_json({
+                                    "type": "progress", 
+                                    "current": current, 
+                                    "total": total,
+                                    "text": text[:200] + "..." if len(text) > 200 else text
+                                })
+                            
+                            # Run with progress in thread
+                            loop = asyncio.get_event_loop()
+                            result = await loop.run_in_executor(
+                                executor, 
+                                transcribe, 
+                                tmp_path, 
+                                config["language"], 
+                                config["hotwords"], 
+                                config["itn"]
+                            )
                             await websocket.send_json({"type": "final", "text": result["text"], "time": result["time"]})
                         finally:
                             os.unlink(tmp_path)
                     break
                 elif msg.get("action") == "config":
-                    config.update({k: v for k, v in msg.items() if k in ("language", "hotwords", "itn", "sample_rate")})
-                    sample_rate = msg.get("sample_rate", 16000)
+                    config.update({k: v for k, v in msg.items() if k in ("language", "hotwords", "itn")})
                     await websocket.send_json({"type": "config_ack", "config": config})
                     
             elif "bytes" in data:
                 audio_buffer.write(data["bytes"])
-                
-                # Send partial results periodically
-                current_time = time.time()
-                if current_time - last_transcribe_time > partial_interval and audio_buffer.tell() > sample_rate * 2:  # At least 1 second of audio
-                    last_transcribe_time = current_time
-                    audio_buffer.seek(0)
-                    audio_data = audio_buffer.read()
-                    audio_buffer.seek(0, 2)  # Back to end
-                    
-                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-                        tmp.write(audio_data)
-                        tmp_path = tmp.name
-                    try:
-                        result = transcribe(tmp_path, config["language"], config["hotwords"], config["itn"])
-                        await websocket.send_json({"type": "partial", "text": result["text"]})
-                    except Exception as e:
-                        logger.warning(f"Partial transcription failed: {e}")
-                    finally:
-                        os.unlink(tmp_path)
                         
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
-        await websocket.send_json({"type": "error", "message": str(e)})
+        try:
+            await websocket.send_json({"type": "error", "message": str(e)})
+        except:
+            pass
 
-# ==================== Gradio UI ====================
+# ==================== Gradio UI with Progress ====================
 
 LANGUAGES = {
     "自动检测 / Auto": "auto",
@@ -289,24 +347,41 @@ LANGUAGES = {
     "日本語 / Japanese": "ja",
 }
 
-def gradio_transcribe(audio, language, hotwords, itn):
-    """Gradio interface function"""
+def gradio_transcribe(audio, language, hotwords, itn, progress=gr.Progress()):
+    """Gradio interface function with progress bar"""
     if audio is None:
         return "请上传或录制音频 / Please upload or record audio", ""
     
     hw_list = [w.strip() for w in hotwords.split(",") if w.strip()] if hotwords else []
     lang_code = LANGUAGES.get(language, "auto")
     
-    result = transcribe(audio, lang_code, hw_list, itn)
-    
-    # Get audio duration
+    # Get audio duration first
     try:
         info = torchaudio.info(audio)
         audio_duration = info.num_frames / info.sample_rate
     except:
         audio_duration = 0
     
-    timer_text = f"⏱️ 识别耗时: {result['time']:.2f}s | 音频时长: {audio_duration:.2f}s | RTF: {result['time']/audio_duration:.2f}x" if audio_duration > 0 else f"⏱️ 识别耗时: {result['time']:.2f}s"
+    # Progress tracking
+    progress_state = {"current": 0, "total": 1, "text": ""}
+    
+    def progress_callback(current, total, text):
+        progress_state["current"] = current
+        progress_state["total"] = total
+        progress_state["text"] = text
+        if total > 0:
+            progress(current / total, desc=f"处理中 {current}/{total} 段...")
+    
+    progress(0, desc="开始识别...")
+    result = transcribe_with_progress(audio, lang_code, hw_list, itn, progress_callback)
+    progress(1, desc="完成!")
+    
+    # Format timer
+    rtf = result['time'] / audio_duration if audio_duration > 0 else 0
+    if progress_state["total"] > 1:
+        timer_text = f"⏱️ 识别耗时: {result['time']:.2f}s | 音频时长: {audio_duration:.2f}s | RTF: {rtf:.2f}x | VAD分段: {progress_state['total']}段"
+    else:
+        timer_text = f"⏱️ 识别耗时: {result['time']:.2f}s | 音频时长: {audio_duration:.2f}s | RTF: {rtf:.2f}x"
     
     return result["text"], timer_text
 
@@ -314,14 +389,14 @@ with gr.Blocks(title="Fun-ASR 语音识别") as demo:
     gr.Markdown("""
     <div style="text-align: center; margin-bottom: 1rem;">
     <h1>🎙️ Fun-ASR 语音识别</h1>
-    <p>基于 Fun-ASR-Nano-2512 的端到端语音识别服务</p>
+    <p>基于 Fun-ASR-Nano-2512 的端到端语音识别服务 | 支持超长音频自动分段</p>
     </div>
     """)
     
     with gr.Row():
         with gr.Column(scale=1):
             audio_input = gr.Audio(
-                label="🎤 上传或录制音频",
+                label="🎤 上传或录制音频 (支持任意时长)",
                 type="filepath",
                 sources=["upload", "microphone"],
             )
@@ -348,7 +423,8 @@ with gr.Blocks(title="Fun-ASR 语音识别") as demo:
         with gr.Column(scale=1):
             result_text = gr.Textbox(
                 label="📝 识别结果",
-                lines=8,
+                lines=12,
+                max_lines=20,
             )
             timer_display = gr.Markdown()
     
@@ -362,16 +438,21 @@ with gr.Blocks(title="Fun-ASR 语音识别") as demo:
     ---
     ### 📡 API 使用
     
-    **REST API:**
+    **REST API (同步):**
     ```bash
     curl -X POST http://localhost:8189/v1/audio/transcriptions \\
-      -F "file=@audio.wav" \\
-      -F "language=auto"
+      -F "file=@audio.wav" -F "language=auto"
+    ```
+    
+    **REST API (流式进度):**
+    ```bash
+    curl -X POST http://localhost:8189/v1/audio/transcriptions/stream \\
+      -F "file=@long_audio.mp3" -F "language=zh"
     ```
     
     **WebSocket:** `ws://localhost:8189/ws/transcribe`
     
-    📖 [API 文档](/docs) | [Swagger UI](/docs)
+    📖 [API 文档](/docs) | 💡 超过30秒的音频自动使用VAD分段处理
     """)
 
 # Mount Gradio app
