@@ -11,6 +11,8 @@
 
 **Production-ready Speech Recognition Service based on Fun-ASR-Nano-2512**
 
+🎁 **All-in-One Image**: Models pre-downloaded, no network required at runtime!
+
 One Docker command to get Web UI + REST API + WebSocket + Real-time Progress
 
 [Quick Start](#-quick-start) • [Features](#-features) • [API Docs](#-api-reference) • [Performance](#-performance-benchmarks)
@@ -45,11 +47,10 @@ docker run -d \
   --name fun-asr \
   --gpus '"device=0"' \
   -p 8189:8189 \
-  -v fun-asr-models:/root/.cache \
   neosun/fun-asr:latest
 ```
 
-First startup downloads model (~1.8GB), subsequent starts load from cache (~30s).
+**All-in-One**: Models are pre-downloaded in the image. Service starts in ~30 seconds!
 
 Open http://localhost:8189 🎉
 
@@ -70,9 +71,8 @@ docker run -d \
   --name fun-asr \
   --gpus '"device=0"' \
   -p 8189:8189 \
-  -v fun-asr-models:/root/.cache \
   --restart unless-stopped \
-  neosun/fun-asr:v1.2.0
+  neosun/fun-asr:v1.3.0
 ```
 
 ### Docker Compose
@@ -81,13 +81,11 @@ docker run -d \
 # docker-compose.yml
 services:
   fun-asr:
-    image: neosun/fun-asr:v1.2.0
+    image: neosun/fun-asr:v1.3.0
     container_name: fun-asr
     restart: unless-stopped
     ports:
       - "8189:8189"
-    volumes:
-      - fun-asr-models:/root/.cache
     deploy:
       resources:
         reservations:
@@ -95,9 +93,6 @@ services:
             - driver: nvidia
               device_ids: ["0"]
               capabilities: [gpu]
-
-volumes:
-  fun-asr-models:
 ```
 
 ```bash
@@ -393,6 +388,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v1.3.0 | 2024-12-18 | **All-in-One**: Models pre-downloaded in image |
 | v1.2.0 | 2024-12-18 | Async API + UI progress bar + SSE streaming |
 | v1.1.0 | 2024-12-18 | VAD segmentation for long audio |
 | v1.0.0 | 2024-12-18 | Initial release |

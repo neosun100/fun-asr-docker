@@ -11,6 +11,8 @@
 
 **Fun-ASR-Nano-2512 ベースの本番環境対応音声認識サービス**
 
+🎁 **All-in-One イメージ**：モデルは事前ダウンロード済み、実行時にネットワーク不要！
+
 Docker コマンド一つで Web UI + REST API + WebSocket + リアルタイム進捗を取得
 
 [クイックスタート](#-クイックスタート) • [機能](#-機能) • [API ドキュメント](#-api-リファレンス) • [パフォーマンス](#-パフォーマンスベンチマーク)
@@ -45,11 +47,11 @@ docker run -d \
   --name fun-asr \
   --gpus '"device=0"' \
   -p 8189:8189 \
-  -v fun-asr-models:/root/.cache \
+   \
   neosun/fun-asr:latest
 ```
 
-初回起動時はモデルをダウンロード（約 1.8GB）、以降はキャッシュから読み込み（約 30 秒）。
+**All-in-One**：モデルはイメージに事前ダウンロード済み、約 30 秒で起動完了！
 
 http://localhost:8189 を開いて使用開始 🎉
 
@@ -70,9 +72,9 @@ docker run -d \
   --name fun-asr \
   --gpus '"device=0"' \
   -p 8189:8189 \
-  -v fun-asr-models:/root/.cache \
+   \
   --restart unless-stopped \
-  neosun/fun-asr:v1.2.0
+  neosun/fun-asr:v1.3.0
 ```
 
 ### Docker Compose
@@ -81,13 +83,11 @@ docker run -d \
 # docker-compose.yml
 services:
   fun-asr:
-    image: neosun/fun-asr:v1.2.0
+    image: neosun/fun-asr:v1.3.0
     container_name: fun-asr
     restart: unless-stopped
     ports:
       - "8189:8189"
-    volumes:
-      - fun-asr-models:/root/.cache
     deploy:
       resources:
         reservations:
@@ -96,8 +96,6 @@ services:
               device_ids: ["0"]
               capabilities: [gpu]
 
-volumes:
-  fun-asr-models:
 ```
 
 ```bash
@@ -314,7 +312,7 @@ print(text)
 
 | バージョン | 日付 | 変更内容 |
 |------------|------|----------|
-| v1.2.0 | 2024-12-18 | 非同期 API + UI プログレスバー + SSE ストリーミング |
+| v1.3.0 | 2024-12-18 | 非同期 API + UI プログレスバー + SSE ストリーミング |
 | v1.1.0 | 2024-12-18 | VAD 分割で長い音声に対応 |
 | v1.0.0 | 2024-12-18 | 初期リリース |
 

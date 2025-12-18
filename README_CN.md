@@ -11,6 +11,8 @@
 
 **基于 Fun-ASR-Nano-2512 的生产级语音识别服务**
 
+🎁 **All-in-One 镜像**：模型已预下载，运行时无需网络！
+
 一条 Docker 命令即可获得 Web UI + REST API + WebSocket + 实时进度
 
 [快速开始](#-快速开始) • [功能特性](#-功能特性) • [API 文档](#-api-参考) • [性能测试](#-性能基准)
@@ -45,11 +47,10 @@ docker run -d \
   --name fun-asr \
   --gpus '"device=0"' \
   -p 8189:8189 \
-  -v fun-asr-models:/root/.cache \
   neosun/fun-asr:latest
 ```
 
-首次启动需下载模型（约 1.8GB），之后从缓存加载（约 30 秒）。
+**All-in-One**：模型已预下载到镜像中，服务约 30 秒启动完成！
 
 打开 http://localhost:8189 即可使用 🎉
 
@@ -70,9 +71,8 @@ docker run -d \
   --name fun-asr \
   --gpus '"device=0"' \
   -p 8189:8189 \
-  -v fun-asr-models:/root/.cache \
   --restart unless-stopped \
-  neosun/fun-asr:v1.2.0
+  neosun/fun-asr:v1.3.0
 ```
 
 ### Docker Compose
@@ -81,13 +81,11 @@ docker run -d \
 # docker-compose.yml
 services:
   fun-asr:
-    image: neosun/fun-asr:v1.2.0
+    image: neosun/fun-asr:v1.3.0
     container_name: fun-asr
     restart: unless-stopped
     ports:
       - "8189:8189"
-    volumes:
-      - fun-asr-models:/root/.cache
     deploy:
       resources:
         reservations:
@@ -95,9 +93,6 @@ services:
             - driver: nvidia
               device_ids: ["0"]
               capabilities: [gpu]
-
-volumes:
-  fun-asr-models:
 ```
 
 ```bash
@@ -393,6 +388,7 @@ fun-asr-docker/
 
 | 版本 | 日期 | 更新内容 |
 |------|------|----------|
+| v1.3.0 | 2024-12-18 | **All-in-One**：模型预下载到镜像 |
 | v1.2.0 | 2024-12-18 | 异步 API + UI 进度条 + SSE 流式端点 |
 | v1.1.0 | 2024-12-18 | VAD 分段支持长音频 |
 | v1.0.0 | 2024-12-18 | 初始版本 |

@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libsndfile1 \
     git \
+    curl \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/bin/python3.10 /usr/bin/python
 
@@ -28,11 +29,32 @@ COPY model.py .
 COPY app.py .
 COPY mcp_server.py .
 
+# ============================================
+# ALL-IN-ONE: Pre-download models during build
+# ============================================
+
+# Download Fun-ASR-Nano-2512 model from ModelScope
+RUN python -c "from funasr import AutoModel; \
+    AutoModel(model='FunAudioLLM/Fun-ASR-Nano-2512', \
+              trust_remote_code=True, \
+              remote_code='./model.py', \
+              device='cpu', \
+              disable_update=True)" && \
+    echo "ASR model downloaded successfully"
+
+# Download FSMN-VAD model from ModelScope
+RUN python -c "from funasr import AutoModel; \
+    AutoModel(model='fsmn-vad', \
+              model_revision='v2.0.4', \
+              device='cpu', \
+              disable_update=True)" && \
+    echo "VAD model downloaded successfully"
+
 # Expose port
 EXPOSE 8189
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+# Health check (reduced start-period since models are pre-loaded)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8189/health || exit 1
 
 # Start command
