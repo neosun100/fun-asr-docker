@@ -1,0 +1,23 @@
+services:
+  fun-asr:
+    image: neosun/fun-asr:latest
+    container_name: fun-asr
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${PORT:-8189}:8189"
+    environment:
+      - PORT=8189
+      - MODEL_DIR=${MODEL_DIR:-FunAudioLLM/Fun-ASR-Nano-2512}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-0}
+    volumes:
+      - fun-asr-cache:/root/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${NVIDIA_VISIBLE_DEVICES:-0}"]
+              capabilities: [gpu]
+
+volumes:
+  fun-asr-cache:
