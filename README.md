@@ -1,28 +1,44 @@
+[English](README.md) | [简体中文](README_CN.md) | [繁體中文](README_TW.md) | [日本語](README_JP.md)
+
+<div align="center">
+
 # 🎙️ Fun-ASR All-in-One Docker
 
 [![Docker Pulls](https://img.shields.io/docker/pulls/neosun/fun-asr?style=flat-square&logo=docker)](https://hub.docker.com/r/neosun/fun-asr)
 [![Docker Image Version](https://img.shields.io/docker/v/neosun/fun-asr?style=flat-square&logo=docker&sort=semver)](https://hub.docker.com/r/neosun/fun-asr)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/neosun100/fun-asr-docker?style=flat-square&logo=github)](https://github.com/neosun100/fun-asr-docker)
 
-**基于 Fun-ASR-Nano-2512 的端到端语音识别服务，支持超长音频自动分段处理**
+**Production-ready Speech Recognition Service based on Fun-ASR-Nano-2512**
 
-一条 Docker 命令即可获得 Web UI + REST API + WebSocket + 流式进度
+One Docker command to get Web UI + REST API + WebSocket + Real-time Progress
 
----
+[Quick Start](#-quick-start) • [Features](#-features) • [API Docs](#-api-reference) • [Performance](#-performance-benchmarks)
 
-## ✨ 特性
-
-| 特性 | 说明 |
-|------|------|
-| 🎯 **Fun-ASR-Nano-2512** | 阿里通义实验室最新 800M 参数端到端 ASR 模型 |
-| 🔊 **VAD 自动分段** | 超过 30 秒的音频自动使用 FSMN-VAD 分段，避免幻觉 |
-| 📊 **实时进度** | UI 进度条 + SSE 流式 API，实时显示处理进度 |
-| 🔌 **OpenAI 兼容** | `/v1/audio/transcriptions` 兼容 Whisper API |
-| 🌍 **多语言** | 支持 31 种语言、7 种中文方言、26 种地方口音 |
-| ⚡ **高性能** | RTF < 0.1，6 分钟音频约 40 秒处理完成 |
+</div>
 
 ---
 
-## 🚀 快速开始
+## 📸 Screenshot
+
+![Web UI](images/ui-screenshot.png)
+
+---
+
+## ✨ Features
+
+| Feature | Description |
+|---------|-------------|
+| 🎯 **Fun-ASR-Nano-2512** | Alibaba's latest 800M parameter end-to-end ASR model |
+| 🔊 **Auto VAD Segmentation** | Audio > 30s automatically segmented to avoid hallucination |
+| 📊 **Real-time Progress** | UI progress bar + SSE streaming API |
+| 🔌 **OpenAI Compatible** | `/v1/audio/transcriptions` compatible with Whisper API |
+| 🌍 **Multi-language** | 31 languages, 7 Chinese dialects, 26 regional accents |
+| ⚡ **High Performance** | RTF < 0.1, 6-min audio processed in ~40s |
+
+---
+
+## 🚀 Quick Start
 
 ```bash
 docker run -d \
@@ -33,13 +49,19 @@ docker run -d \
   neosun/fun-asr:latest
 ```
 
-首次启动需下载模型（约 1.8GB），之后从缓存加载（约 30 秒）。
+First startup downloads model (~1.8GB), subsequent starts load from cache (~30s).
 
-打开 http://localhost:8189 即可使用 🎉
+Open http://localhost:8189 🎉
 
 ---
 
-## 📦 部署方式
+## 📦 Installation
+
+### Prerequisites
+
+- Docker 20.10+
+- NVIDIA GPU with 4GB+ VRAM
+- NVIDIA Container Toolkit
 
 ### Docker Run
 
@@ -82,97 +104,88 @@ volumes:
 docker compose up -d
 ```
 
-### 环境变量
+### Health Check
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `PORT` | `8189` | 服务端口 |
-| `MODEL_DIR` | `FunAudioLLM/Fun-ASR-Nano-2512` | 模型路径 |
+```bash
+curl http://localhost:8189/health
+# {"status":"healthy","model_loaded":true,"vad_loaded":true,"gpu":{...}}
+```
+
+---
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `8189` | Service port |
+| `MODEL_DIR` | `FunAudioLLM/Fun-ASR-Nano-2512` | Model path |
+
+### Volume Mounts
+
+| Path | Description |
+|------|-------------|
+| `/root/.cache` | Model cache (persistent) |
 
 ---
 
 ## 🖥️ Web UI
 
-访问 http://localhost:8189 使用 Web 界面：
+Access http://localhost:8189 for the web interface:
 
-### 功能
-- 📤 上传音频文件（支持 wav, mp3, m4a, flac 等）
-- 🎤 实时录音识别
-- 📊 **进度条显示**（长音频分段处理时实时更新）
-- ⚙️ 参数设置：语言、热词、ITN
+### Features
+- 📤 Upload audio files (wav, mp3, m4a, flac, etc.)
+- 🎤 Real-time microphone recording
+- 📊 **Progress bar** for long audio processing
+- ⚙️ Settings: Language, Hotwords, ITN
 
-### 界面说明
-- **语言选择**：自动检测 / 中文 / English / 日本語
-- **热词**：用逗号分隔，提高特定词汇识别率
-- **文本规整 (ITN)**：将数字、日期转换为标准格式
-
-### 输出信息
+### Output Info
 ```
-⏱️ 识别耗时: 39.19s | 音频时长: 367.96s | RTF: 0.11x | VAD分段: 33段
+⏱️ Duration: 39.19s | Audio: 367.96s | RTF: 0.11x | VAD Segments: 33
 ```
 
 ---
 
-## 📡 REST API
+## 📡 API Reference
 
-### 端点列表
+### Endpoints
 
-| 端点 | 方法 | 说明 |
-|------|------|------|
-| `/health` | GET | 健康检查 |
-| `/v1/audio/transcriptions` | POST | 同步转录（OpenAI 兼容） |
-| `/v1/audio/transcriptions/stream` | POST | 流式转录（SSE 进度） |
-| `/ws/transcribe` | WebSocket | 实时流式转录 |
-| `/docs` | GET | Swagger API 文档 |
-
----
-
-### 1. 健康检查
-
-```bash
-curl http://localhost:8189/health
-```
-
-响应：
-```json
-{
-  "status": "healthy",
-  "model_loaded": true,
-  "vad_loaded": true,
-  "gpu": {
-    "memory_used_mb": 4065,
-    "memory_total_mb": 46068
-  }
-}
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/v1/audio/transcriptions` | POST | Sync transcription (OpenAI compatible) |
+| `/v1/audio/transcriptions/stream` | POST | Streaming transcription (SSE progress) |
+| `/ws/transcribe` | WebSocket | Real-time streaming |
+| `/docs` | GET | Swagger UI |
 
 ---
 
-### 2. 同步转录 API
+### 1. Sync Transcription API
 
-**适用场景**：短音频（< 5 分钟）或不需要进度显示
+**Best for**: Short audio (< 5 min)
 
 ```bash
 curl -X POST http://localhost:8189/v1/audio/transcriptions \
   -F "file=@audio.wav" \
   -F "language=auto" \
-  -F "hotwords=人工智能,机器学习" \
+  -F "hotwords=AI,machine learning" \
   -F "itn=true"
 ```
 
-**参数说明**：
+**Parameters**:
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `file` | File | 必填 | 音频文件 |
-| `language` | string | `auto` | 语言代码：auto, zh, en, ja |
-| `hotwords` | string | `""` | 热词，逗号分隔 |
-| `itn` | bool | `true` | 是否启用文本规整 |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `file` | File | Required | Audio file |
+| `language` | string | `auto` | Language: auto, zh, en, ja |
+| `hotwords` | string | `""` | Comma-separated hotwords |
+| `itn` | bool | `true` | Inverse text normalization |
 
-**响应**：
+**Response**:
 ```json
 {
-  "text": "开放时间早上九点至下午五点。",
+  "text": "The transcribed text...",
   "duration": 0.771,
   "audio_duration": 5.62
 }
@@ -180,9 +193,9 @@ curl -X POST http://localhost:8189/v1/audio/transcriptions \
 
 ---
 
-### 3. 流式转录 API（推荐用于长音频）
+### 2. Streaming Transcription API (Recommended for Long Audio)
 
-**适用场景**：长音频，需要实时进度反馈
+**Best for**: Long audio with real-time progress
 
 ```bash
 curl -X POST http://localhost:8189/v1/audio/transcriptions/stream \
@@ -191,30 +204,27 @@ curl -X POST http://localhost:8189/v1/audio/transcriptions/stream \
   --no-buffer
 ```
 
-**响应格式**：Server-Sent Events (SSE)
+**Response**: Server-Sent Events (SSE)
 
 ```
-data: {"type": "progress", "current": 1, "total": 33, "text": "哎呀，真是有趣的设计呢..."}
-
-data: {"type": "progress", "current": 2, "total": 33, "text": "哎呀，真是有趣的设计呢。偶尔尝试下..."}
-
-... (更多进度更新)
-
-data: {"type": "complete", "text": "完整识别结果...", "duration": 39.191}
+data: {"type": "progress", "current": 1, "total": 33, "text": "Partial text..."}
+data: {"type": "progress", "current": 2, "total": 33, "text": "More text..."}
+...
+data: {"type": "complete", "text": "Full transcription...", "duration": 39.191}
 ```
 
-**事件类型**：
+**Event Types**:
 
-| type | 说明 | 字段 |
-|------|------|------|
-| `progress` | 处理进度 | `current`, `total`, `text`（部分结果） |
-| `complete` | 处理完成 | `text`（完整结果）, `duration` |
+| type | Description | Fields |
+|------|-------------|--------|
+| `progress` | Processing progress | `current`, `total`, `text` (partial) |
+| `complete` | Processing complete | `text` (full), `duration` |
 
 ---
 
-### 4. Python 客户端示例
+### 3. Python Client Examples
 
-#### 同步调用
+#### Sync Call
 
 ```python
 import requests
@@ -232,7 +242,7 @@ result = transcribe("audio.wav", "zh")
 print(result["text"])
 ```
 
-#### 流式调用（带进度）
+#### Streaming Call with Progress
 
 ```python
 import requests
@@ -253,7 +263,7 @@ def transcribe_with_progress(audio_path, language="auto"):
             if line.startswith("data: "):
                 data = json.loads(line[6:])
                 if data["type"] == "progress":
-                    print(f"进度: {data['current']}/{data['total']}")
+                    print(f"Progress: {data['current']}/{data['total']}")
                 elif data["type"] == "complete":
                     return data["text"]
     return None
@@ -262,153 +272,65 @@ text = transcribe_with_progress("long_audio.mp3", "zh")
 print(text)
 ```
 
-#### JavaScript/Node.js 示例
+---
 
-```javascript
-// 同步调用
-async function transcribe(audioPath) {
-  const formData = new FormData();
-  formData.append('file', fs.createReadStream(audioPath));
-  formData.append('language', 'auto');
-  
-  const response = await fetch('http://localhost:8189/v1/audio/transcriptions', {
-    method: 'POST',
-    body: formData
-  });
-  return response.json();
-}
+### 4. WebSocket API
 
-// 流式调用
-async function transcribeWithProgress(audioPath, onProgress) {
-  const formData = new FormData();
-  formData.append('file', fs.createReadStream(audioPath));
-  
-  const response = await fetch('http://localhost:8189/v1/audio/transcriptions/stream', {
-    method: 'POST',
-    body: formData
-  });
-  
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    
-    const lines = decoder.decode(value).split('\n');
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const data = JSON.parse(line.slice(6));
-        if (data.type === 'progress') {
-          onProgress(data.current, data.total, data.text);
-        } else if (data.type === 'complete') {
-          return data.text;
-        }
-      }
-    }
-  }
-}
+**Best for**: Real-time microphone streaming
+
+**Connect**: `ws://localhost:8189/ws/transcribe`
+
+**Protocol**:
+```
+1. Client connects
+2. Client sends config: {"action": "config", "language": "zh"}
+3. Server acknowledges: {"type": "config_ack", ...}
+4. Client sends audio chunks (binary)
+5. Client sends: {"action": "end"}
+6. Server responds: {"type": "final", "text": "...", "time": 1.23}
 ```
 
 ---
 
-### 5. WebSocket API
+## 📊 Performance Benchmarks
 
-**适用场景**：实时录音流式识别
+**Test Environment**: NVIDIA L40S GPU
 
-**连接**：`ws://localhost:8189/ws/transcribe`
+| Audio Duration | VAD Segments | Processing Time | RTF |
+|----------------|--------------|-----------------|-----|
+| 3 sec | 1 | 0.44s | 0.15x |
+| 5 sec | 1 | 0.77s | 0.15x |
+| 6 min | 33 | 39s | 0.11x |
+| 2 hours | ~660 | ~13 min | ~0.11x |
 
-**协议流程**：
+> RTF (Real-Time Factor) < 1.0 means faster than real-time
 
-```
-1. 客户端连接 WebSocket
-2. 客户端发送配置: {"action": "config", "language": "zh", "hotwords": [], "itn": true}
-3. 服务端确认: {"type": "config_ack", "config": {...}}
-4. 客户端发送音频数据 (binary)
-5. 客户端发送结束信号: {"action": "end"}
-6. 服务端返回结果: {"type": "final", "text": "...", "time": 1.23}
-```
+### VAD Segmentation
 
-**Python WebSocket 示例**：
-
-```python
-import asyncio
-import websockets
-import json
-
-async def realtime_transcribe(audio_path):
-    async with websockets.connect("ws://localhost:8189/ws/transcribe") as ws:
-        # 发送配置
-        await ws.send(json.dumps({
-            "action": "config",
-            "language": "zh",
-            "hotwords": [],
-            "itn": True
-        }))
-        config_ack = await ws.recv()
-        print("Config:", config_ack)
-        
-        # 发送音频数据
-        with open(audio_path, "rb") as f:
-            while chunk := f.read(4096):
-                await ws.send(chunk)
-        
-        # 发送结束信号
-        await ws.send(json.dumps({"action": "end"}))
-        
-        # 接收结果
-        result = await ws.recv()
-        return json.loads(result)
-
-result = asyncio.run(realtime_transcribe("audio.wav"))
-print(result["text"])
-```
+- Audio ≤ 30s: Direct recognition
+- Audio > 30s: Auto VAD segmentation to prevent hallucination
 
 ---
 
-## 📊 性能基准
+## 🗣️ Supported Languages
 
-**测试环境**：NVIDIA L40S GPU
+### Main Languages
+Chinese, English, Japanese, Korean, German, Spanish, French, Italian, Russian
 
-### 处理速度
+### Chinese Dialects
+Cantonese, Sichuan, Dongbei, Shanghai, Minnan + 18 more
 
-| 音频时长 | VAD 分段 | 处理时间 | RTF |
-|----------|----------|----------|-----|
-| 3 秒 | 1 段 | 0.44s | 0.15x |
-| 5 秒 | 1 段 | 0.77s | 0.15x |
-| 6 分钟 | 33 段 | 39s | 0.11x |
-| 2 小时 | ~660 段 | ~13 分钟 | ~0.11x |
-
-> RTF (Real-Time Factor) < 1.0 表示处理速度快于实时播放
-
-### VAD 分段机制
-
-- 音频 ≤ 30 秒：直接识别
-- 音频 > 30 秒：自动使用 FSMN-VAD 分段后逐段识别
-- 避免长音频产生幻觉（重复输出）
+### Special Features
+- High-noise recognition
+- Lyrics recognition
+- Hotword boosting
+- ITN (Inverse Text Normalization)
 
 ---
 
-## 🗣️ 支持的语言
+## 🔧 Advanced Configuration
 
-### 主要语言
-- 中文、英语、日语、韩语
-- 德语、西班牙语、法语、意大利语、俄语
-
-### 中文方言
-- 粤语、四川话、东北话、上海话、闽南语等 18 种方言
-
-### 特殊能力
-- 高噪声环境识别
-- 歌词识别
-- 热词增强
-- ITN 文本规整
-
----
-
-## 🔧 高级配置
-
-### Nginx 反向代理
+### Nginx Reverse Proxy
 
 ```nginx
 server {
@@ -421,54 +343,91 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
-        proxy_read_timeout 1800s;  # 30 分钟超时，支持超长音频
+        proxy_read_timeout 1800s;  # 30 min for long audio
     }
 }
 ```
 
-### GPU 选择
+### Multi-GPU Deployment
 
 ```bash
-# 使用 GPU 0
-docker run --gpus '"device=0"' ...
+# GPU 0
+docker run --gpus '"device=0"' -p 8189:8189 --name fun-asr-0 neosun/fun-asr:latest
 
-# 使用 GPU 2
-docker run --gpus '"device=2"' ...
-
-# 使用多个 GPU（模型只用一个，但可以运行多个容器）
-docker run --gpus '"device=0"' -p 8189:8189 --name fun-asr-0 ...
-docker run --gpus '"device=1"' -p 8190:8189 --name fun-asr-1 ...
+# GPU 1
+docker run --gpus '"device=1"' -p 8190:8189 --name fun-asr-1 neosun/fun-asr:latest
 ```
 
 ---
 
-## 📋 版本历史
+## 📁 Project Structure
 
-| 版本 | 日期 | 更新内容 |
-|------|------|----------|
-| v1.2.0 | 2024-12-18 | 异步 API + UI 进度条 + SSE 流式端点 |
-| v1.1.0 | 2024-12-18 | VAD 分段支持长音频（修复幻觉问题） |
-| v1.0.0 | 2024-12-18 | 初始版本：FastAPI + Gradio + WebSocket |
-
----
-
-## 🛠️ 技术栈
-
-- **ASR 模型**：[Fun-ASR-Nano-2512](https://huggingface.co/FunAudioLLM/Fun-ASR-Nano-2512)
-- **VAD 模型**：[FSMN-VAD](https://modelscope.cn/models/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch)
-- **框架**：FastAPI + Gradio
-- **运行时**：PyTorch + CUDA 12.1
-- **容器**：Docker + NVIDIA Container Toolkit
+```
+fun-asr-docker/
+├── app.py              # FastAPI + Gradio application
+├── model.py            # Fun-ASR-Nano model wrapper
+├── Dockerfile          # Docker build file
+├── docker-compose.yml  # Docker Compose config
+├── requirements.txt    # Python dependencies
+├── start.sh            # Auto GPU selection launcher
+├── mcp_server.py       # MCP server for AI assistants
+├── .env.example        # Environment template
+└── images/             # Documentation images
+```
 
 ---
 
-## 🙏 致谢
+## 🤝 Contributing
 
-- [FunAudioLLM/Fun-ASR](https://github.com/FunAudioLLM/Fun-ASR) - Fun-ASR-Nano 模型
-- [Alibaba DAMO Academy](https://github.com/alibaba-damo-academy/FunASR) - FunASR 框架
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing`)
+5. Open a Pull Request
 
 ---
 
-## 📄 许可证
+## 📋 Changelog
 
-Apache License 2.0
+| Version | Date | Changes |
+|---------|------|---------|
+| v1.2.0 | 2024-12-18 | Async API + UI progress bar + SSE streaming |
+| v1.1.0 | 2024-12-18 | VAD segmentation for long audio |
+| v1.0.0 | 2024-12-18 | Initial release |
+
+---
+
+## 🛠️ Tech Stack
+
+- **ASR Model**: [Fun-ASR-Nano-2512](https://huggingface.co/FunAudioLLM/Fun-ASR-Nano-2512)
+- **VAD Model**: [FSMN-VAD](https://modelscope.cn/models/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch)
+- **Framework**: FastAPI + Gradio
+- **Runtime**: PyTorch + CUDA 12.1
+- **Container**: Docker + NVIDIA Container Toolkit
+
+---
+
+## 📄 License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- [FunAudioLLM/Fun-ASR](https://github.com/FunAudioLLM/Fun-ASR) - Fun-ASR-Nano model
+- [Alibaba DAMO Academy](https://github.com/alibaba-damo-academy/FunASR) - FunASR framework
+
+---
+
+## ⭐ Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=neosun100/fun-asr-docker&type=Date)](https://star-history.com/#neosun100/fun-asr-docker)
+
+---
+
+## 📱 Follow Us
+
+![WeChat](https://img.aws.xin/uPic/扫码_搜索联合传播样式-标准色版.png)

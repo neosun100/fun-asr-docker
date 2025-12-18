@@ -1,0 +1,433 @@
+[English](README.md) | [简体中文](README_CN.md) | [繁體中文](README_TW.md) | [日本語](README_JP.md)
+
+<div align="center">
+
+# 🎙️ Fun-ASR All-in-One Docker
+
+[![Docker Pulls](https://img.shields.io/docker/pulls/neosun/fun-asr?style=flat-square&logo=docker)](https://hub.docker.com/r/neosun/fun-asr)
+[![Docker Image Version](https://img.shields.io/docker/v/neosun/fun-asr?style=flat-square&logo=docker&sort=semver)](https://hub.docker.com/r/neosun/fun-asr)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/neosun100/fun-asr-docker?style=flat-square&logo=github)](https://github.com/neosun100/fun-asr-docker)
+
+**基于 Fun-ASR-Nano-2512 的生产级语音识别服务**
+
+一条 Docker 命令即可获得 Web UI + REST API + WebSocket + 实时进度
+
+[快速开始](#-快速开始) • [功能特性](#-功能特性) • [API 文档](#-api-参考) • [性能测试](#-性能基准)
+
+</div>
+
+---
+
+## 📸 界面截图
+
+![Web UI](images/ui-screenshot.png)
+
+---
+
+## ✨ 功能特性
+
+| 特性 | 说明 |
+|------|------|
+| 🎯 **Fun-ASR-Nano-2512** | 阿里通义实验室最新 800M 参数端到端 ASR 模型 |
+| 🔊 **VAD 自动分段** | 超过 30 秒的音频自动分段，避免幻觉问题 |
+| 📊 **实时进度显示** | UI 进度条 + SSE 流式 API |
+| 🔌 **OpenAI 兼容** | `/v1/audio/transcriptions` 兼容 Whisper API |
+| 🌍 **多语言支持** | 31 种语言、7 种中文方言、26 种地方口音 |
+| ⚡ **高性能** | RTF < 0.1，6 分钟音频约 40 秒处理完成 |
+
+---
+
+## 🚀 快速开始
+
+```bash
+docker run -d \
+  --name fun-asr \
+  --gpus '"device=0"' \
+  -p 8189:8189 \
+  -v fun-asr-models:/root/.cache \
+  neosun/fun-asr:latest
+```
+
+首次启动需下载模型（约 1.8GB），之后从缓存加载（约 30 秒）。
+
+打开 http://localhost:8189 即可使用 🎉
+
+---
+
+## 📦 安装部署
+
+### 前置条件
+
+- Docker 20.10+
+- NVIDIA GPU（显存 4GB+）
+- NVIDIA Container Toolkit
+
+### Docker Run
+
+```bash
+docker run -d \
+  --name fun-asr \
+  --gpus '"device=0"' \
+  -p 8189:8189 \
+  -v fun-asr-models:/root/.cache \
+  --restart unless-stopped \
+  neosun/fun-asr:v1.2.0
+```
+
+### Docker Compose
+
+```yaml
+# docker-compose.yml
+services:
+  fun-asr:
+    image: neosun/fun-asr:v1.2.0
+    container_name: fun-asr
+    restart: unless-stopped
+    ports:
+      - "8189:8189"
+    volumes:
+      - fun-asr-models:/root/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+
+volumes:
+  fun-asr-models:
+```
+
+```bash
+docker compose up -d
+```
+
+### 健康检查
+
+```bash
+curl http://localhost:8189/health
+# {"status":"healthy","model_loaded":true,"vad_loaded":true,"gpu":{...}}
+```
+
+---
+
+## ⚙️ 配置说明
+
+### 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `PORT` | `8189` | 服务端口 |
+| `MODEL_DIR` | `FunAudioLLM/Fun-ASR-Nano-2512` | 模型路径 |
+
+### 数据卷
+
+| 路径 | 说明 |
+|------|------|
+| `/root/.cache` | 模型缓存（持久化） |
+
+---
+
+## 🖥️ Web UI 使用
+
+访问 http://localhost:8189 使用 Web 界面：
+
+### 功能
+- 📤 上传音频文件（支持 wav, mp3, m4a, flac 等）
+- 🎤 实时录音识别
+- 📊 **进度条显示**（长音频分段处理时实时更新）
+- ⚙️ 参数设置：语言、热词、ITN
+
+### 输出信息
+```
+⏱️ 识别耗时: 39.19s | 音频时长: 367.96s | RTF: 0.11x | VAD分段: 33段
+```
+
+---
+
+## 📡 API 参考
+
+### 端点列表
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/health` | GET | 健康检查 |
+| `/v1/audio/transcriptions` | POST | 同步转录（OpenAI 兼容） |
+| `/v1/audio/transcriptions/stream` | POST | 流式转录（SSE 进度） |
+| `/ws/transcribe` | WebSocket | 实时流式转录 |
+| `/docs` | GET | Swagger API 文档 |
+
+---
+
+### 1. 同步转录 API
+
+**适用场景**：短音频（< 5 分钟）
+
+```bash
+curl -X POST http://localhost:8189/v1/audio/transcriptions \
+  -F "file=@audio.wav" \
+  -F "language=auto" \
+  -F "hotwords=人工智能,机器学习" \
+  -F "itn=true"
+```
+
+**参数说明**：
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `file` | File | 必填 | 音频文件 |
+| `language` | string | `auto` | 语言：auto, zh, en, ja |
+| `hotwords` | string | `""` | 热词，逗号分隔 |
+| `itn` | bool | `true` | 是否启用文本规整 |
+
+**响应**：
+```json
+{
+  "text": "识别出的文本内容...",
+  "duration": 0.771,
+  "audio_duration": 5.62
+}
+```
+
+---
+
+### 2. 流式转录 API（推荐用于长音频）
+
+**适用场景**：长音频，需要实时进度反馈
+
+```bash
+curl -X POST http://localhost:8189/v1/audio/transcriptions/stream \
+  -F "file=@long_audio.mp3" \
+  -F "language=zh" \
+  --no-buffer
+```
+
+**响应格式**：Server-Sent Events (SSE)
+
+```
+data: {"type": "progress", "current": 1, "total": 33, "text": "部分文本..."}
+data: {"type": "progress", "current": 2, "total": 33, "text": "更多文本..."}
+...
+data: {"type": "complete", "text": "完整识别结果...", "duration": 39.191}
+```
+
+**事件类型**：
+
+| type | 说明 | 字段 |
+|------|------|------|
+| `progress` | 处理进度 | `current`, `total`, `text`（部分结果） |
+| `complete` | 处理完成 | `text`（完整结果）, `duration` |
+
+---
+
+### 3. Python 客户端示例
+
+#### 同步调用
+
+```python
+import requests
+
+def transcribe(audio_path, language="auto"):
+    with open(audio_path, "rb") as f:
+        response = requests.post(
+            "http://localhost:8189/v1/audio/transcriptions",
+            files={"file": f},
+            data={"language": language}
+        )
+    return response.json()
+
+result = transcribe("audio.wav", "zh")
+print(result["text"])
+```
+
+#### 流式调用（带进度）
+
+```python
+import requests
+import json
+
+def transcribe_with_progress(audio_path, language="auto"):
+    with open(audio_path, "rb") as f:
+        response = requests.post(
+            "http://localhost:8189/v1/audio/transcriptions/stream",
+            files={"file": f},
+            data={"language": language},
+            stream=True
+        )
+    
+    for line in response.iter_lines():
+        if line:
+            line = line.decode("utf-8")
+            if line.startswith("data: "):
+                data = json.loads(line[6:])
+                if data["type"] == "progress":
+                    print(f"进度: {data['current']}/{data['total']}")
+                elif data["type"] == "complete":
+                    return data["text"]
+    return None
+
+text = transcribe_with_progress("long_audio.mp3", "zh")
+print(text)
+```
+
+---
+
+### 4. WebSocket API
+
+**适用场景**：实时录音流式识别
+
+**连接**：`ws://localhost:8189/ws/transcribe`
+
+**协议流程**：
+```
+1. 客户端连接 WebSocket
+2. 客户端发送配置: {"action": "config", "language": "zh"}
+3. 服务端确认: {"type": "config_ack", ...}
+4. 客户端发送音频数据 (binary)
+5. 客户端发送结束信号: {"action": "end"}
+6. 服务端返回结果: {"type": "final", "text": "...", "time": 1.23}
+```
+
+---
+
+## 📊 性能基准
+
+**测试环境**：NVIDIA L40S GPU
+
+| 音频时长 | VAD 分段 | 处理时间 | RTF |
+|----------|----------|----------|-----|
+| 3 秒 | 1 段 | 0.44s | 0.15x |
+| 5 秒 | 1 段 | 0.77s | 0.15x |
+| 6 分钟 | 33 段 | 39s | 0.11x |
+| 2 小时 | ~660 段 | ~13 分钟 | ~0.11x |
+
+> RTF (Real-Time Factor) < 1.0 表示处理速度快于实时播放
+
+### VAD 分段机制
+
+- 音频 ≤ 30 秒：直接识别
+- 音频 > 30 秒：自动使用 FSMN-VAD 分段后逐段识别，避免幻觉
+
+---
+
+## 🗣️ 支持的语言
+
+### 主要语言
+中文、英语、日语、韩语、德语、西班牙语、法语、意大利语、俄语
+
+### 中文方言
+粤语、四川话、东北话、上海话、闽南语等 18 种方言
+
+### 特殊能力
+- 高噪声环境识别
+- 歌词识别
+- 热词增强
+- ITN 文本规整
+
+---
+
+## 🔧 高级配置
+
+### Nginx 反向代理
+
+```nginx
+server {
+    listen 80;
+    server_name asr.example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8189;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 1800s;  # 30 分钟超时，支持超长音频
+    }
+}
+```
+
+### 多 GPU 部署
+
+```bash
+# GPU 0
+docker run --gpus '"device=0"' -p 8189:8189 --name fun-asr-0 neosun/fun-asr:latest
+
+# GPU 1
+docker run --gpus '"device=1"' -p 8190:8189 --name fun-asr-1 neosun/fun-asr:latest
+```
+
+---
+
+## 📁 项目结构
+
+```
+fun-asr-docker/
+├── app.py              # FastAPI + Gradio 应用
+├── model.py            # Fun-ASR-Nano 模型封装
+├── Dockerfile          # Docker 构建文件
+├── docker-compose.yml  # Docker Compose 配置
+├── requirements.txt    # Python 依赖
+├── start.sh            # 自动 GPU 选择启动脚本
+├── mcp_server.py       # MCP 服务器（AI 助手集成）
+├── .env.example        # 环境变量模板
+└── images/             # 文档图片
+```
+
+---
+
+## 🤝 参与贡献
+
+欢迎贡献代码！请随时提交 Pull Request。
+
+1. Fork 本仓库
+2. 创建特性分支 (`git checkout -b feature/amazing`)
+3. 提交更改 (`git commit -m 'Add amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing`)
+5. 创建 Pull Request
+
+---
+
+## 📋 更新日志
+
+| 版本 | 日期 | 更新内容 |
+|------|------|----------|
+| v1.2.0 | 2024-12-18 | 异步 API + UI 进度条 + SSE 流式端点 |
+| v1.1.0 | 2024-12-18 | VAD 分段支持长音频 |
+| v1.0.0 | 2024-12-18 | 初始版本 |
+
+---
+
+## 🛠️ 技术栈
+
+- **ASR 模型**：[Fun-ASR-Nano-2512](https://huggingface.co/FunAudioLLM/Fun-ASR-Nano-2512)
+- **VAD 模型**：[FSMN-VAD](https://modelscope.cn/models/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch)
+- **框架**：FastAPI + Gradio
+- **运行时**：PyTorch + CUDA 12.1
+- **容器**：Docker + NVIDIA Container Toolkit
+
+---
+
+## 📄 许可证
+
+本项目采用 Apache License 2.0 许可证 - 详见 [LICENSE](LICENSE) 文件。
+
+---
+
+## 🙏 致谢
+
+- [FunAudioLLM/Fun-ASR](https://github.com/FunAudioLLM/Fun-ASR) - Fun-ASR-Nano 模型
+- [阿里巴巴达摩院](https://github.com/alibaba-damo-academy/FunASR) - FunASR 框架
+
+---
+
+## ⭐ Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=neosun100/fun-asr-docker&type=Date)](https://star-history.com/#neosun100/fun-asr-docker)
+
+---
+
+## 📱 关注公众号
+
+![公众号](https://img.aws.xin/uPic/扫码_搜索联合传播样式-标准色版.png)
