@@ -72,7 +72,7 @@ docker run -d \
   --gpus '"device=0"' \
   -p 8189:8189 \
   --restart unless-stopped \
-  neosun/fun-asr:v1.3.0
+  neosun/fun-asr:v1.3.1
 ```
 
 ### Docker Compose
@@ -81,7 +81,7 @@ docker run -d \
 # docker-compose.yml
 services:
   fun-asr:
-    image: neosun/fun-asr:v1.3.0
+    image: neosun/fun-asr:v1.3.1
     container_name: fun-asr
     restart: unless-stopped
     ports:
@@ -388,7 +388,7 @@ fun-asr-docker/
 
 | 版本 | 日期 | 更新内容 |
 |------|------|----------|
-| v1.3.0 | 2024-12-18 | **All-in-One**：模型预下载到镜像 |
+| v1.3.1 | 2024-12-18 | **All-in-One**：模型预下载到镜像 |
 | v1.2.0 | 2024-12-18 | 异步 API + UI 进度条 + SSE 流式端点 |
 | v1.1.0 | 2024-12-18 | VAD 分段支持长音频 |
 | v1.0.0 | 2024-12-18 | 初始版本 |

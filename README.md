@@ -72,7 +72,7 @@ docker run -d \
   --gpus '"device=0"' \
   -p 8189:8189 \
   --restart unless-stopped \
-  neosun/fun-asr:v1.3.0
+  neosun/fun-asr:v1.3.1
 ```
 
 ### Docker Compose
@@ -81,7 +81,7 @@ docker run -d \
 # docker-compose.yml
 services:
   fun-asr:
-    image: neosun/fun-asr:v1.3.0
+    image: neosun/fun-asr:v1.3.1
     container_name: fun-asr
     restart: unless-stopped
     ports:
@@ -388,7 +388,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 | Version | Date | Changes |
 |---------|------|---------|
-| v1.3.0 | 2024-12-18 | **All-in-One**: Models pre-downloaded in image |
+| v1.3.1 | 2024-12-18 | **All-in-One**: Models pre-downloaded in image |
 | v1.2.0 | 2024-12-18 | Async API + UI progress bar + SSE streaming |
 | v1.1.0 | 2024-12-18 | VAD segmentation for long audio |
 | v1.0.0 | 2024-12-18 | Initial release |

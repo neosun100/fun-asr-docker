@@ -3,7 +3,7 @@
 
 services:
   fun-asr:
-    image: neosun/fun-asr:v1.3.0
+    image: neosun/fun-asr:v1.3.1
     container_name: fun-asr
     restart: unless-stopped
     ports:

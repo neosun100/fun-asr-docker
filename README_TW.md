@@ -74,7 +74,7 @@ docker run -d \
   -p 8189:8189 \
    \
   --restart unless-stopped \
-  neosun/fun-asr:v1.3.0
+  neosun/fun-asr:v1.3.1
 ```
 
 ### Docker Compose
@@ -83,7 +83,7 @@ docker run -d \
 # docker-compose.yml
 services:
   fun-asr:
-    image: neosun/fun-asr:v1.3.0
+    image: neosun/fun-asr:v1.3.1
     container_name: fun-asr
     restart: unless-stopped
     ports:
@@ -312,7 +312,7 @@ print(text)
 
 | 版本 | 日期 | 更新內容 |
 |------|------|----------|
-| v1.3.0 | 2024-12-18 | 非同步 API + UI 進度條 + SSE 串流端點 |
+| v1.3.1 | 2024-12-18 | 非同步 API + UI 進度條 + SSE 串流端點 |
 | v1.1.0 | 2024-12-18 | VAD 分段支援長音訊 |
 | v1.0.0 | 2024-12-18 | 初始版本 |
 
